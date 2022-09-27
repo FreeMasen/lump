@@ -1,9 +1,5 @@
 local Lump = require "lump"
-local P = {}
-P.__index = P
-P.__tostring = function(self)
-  return string.format("P(%s)", self)
-end
+
 describe("unuse #t", function()
   it("will return a table", function()
     local key = "some-key"
