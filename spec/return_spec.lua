@@ -1,16 +1,19 @@
 local Lump = require "lump"
-
-describe("unuse", function()
+local P = {}
+P.__index = P
+P.__tostring = function(self)
+  return string.format("P(%s)", self)
+end
+describe("unuse #t", function()
   it("will return a table", function()
+    local key = "some-key"
     local l = Lump.new(2, function() return {} end)
-    local one = l:get("some-key")
-    assert.are.equal(1, l.segments["some-key"]._in_use_ct)
-    assert.are.equal(0, l.segments["some-key"]._unused_ct)
-    l:unuse(one)
-    assert.are.equal(1, l.segments["some-key"]._unused_ct)
-    assert.are.equal(0, l.segments["some-key"]._in_use_ct)
-    local two = l:get("some-key")
+    local one = l:get(key)
+    local segment = l.segments[key]
+    assert.are.equal(0, #segment.unused)
+    l:unuse(key, one)
+    assert.are.equal(1, #segment.unused)
+    local two = l:get(key)
     assert.are.equal(one, two)
   end)
 end)
-

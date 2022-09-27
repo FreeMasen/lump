@@ -1,10 +1,11 @@
 local Lump = require "lump"
 
-describe("GC Guard", function()
+describe("GC Guard #g", function()
   it("works", function()
-    local l = Lump.new(2, function() return {} end)
+    local key = "some-key"
+    local l = Lump.new(1, function() return {} end)
     local function test()
-      local entry = l:get()
+      local entry = l:get(key)
       return string.format("%s", entry)
     end
     local one = test()
