@@ -1,8 +1,9 @@
 local log = require "log"
 
 --- @class Guard
---- A table protected from garbage collection by the Pool
+--- A guard to protect a parent table from garbage collection
 local Guard = {}
+Guard.__index = Guard
 Guard.__gc = function(self)
   log.trace("Guard.__gc")
   if type(self._on_gc) == "function" then
@@ -24,9 +25,9 @@ function Guard:__tostring()
 end
 
 --- @class Lump
---- @field segments {string: LumpSegment} A map of key to pool segments
+--- @field segments {string: LumpSegment} A map of key to segments
 --- @field ctor fun():any A constructor for new entries
---- @field size_unused_per_key integer The max entries per pool segment
+--- @field size_unused_per_key integer The max entries per segment
 --- A lump of entries that will be protected from garbage collection
 --- when not in use elsewhere
 local Lump = {}
@@ -40,10 +41,10 @@ Lump.__index = Lump
 local LumpSegment = {}
 LumpSegment.__index = LumpSegment
 
---- Create a new pool
---- @param size_unused_per_key integer The maximum size for each key's segment of the pool
+--- Create a new Lump
+--- @param size_unused_per_key integer The maximum size for each key's segment
 --- @param idle_timeout integer The maximum number of seconds a table can be unused
---- @param ctor fun():any A constructor for creating a new entry into a pool segment
+--- @param ctor fun():any A constructor for creating a new entry into a segment
 --- @return Lump
 function Lump.new(size_unused_per_key, ctor)
   return setmetatable({
@@ -56,7 +57,7 @@ end
 --- Get a new or unused entry from the segment matching the provided key
 --- 
 --- Note: If the key is not found a new segment will be created.
---- @param key string The key for this pool segment
+--- @param key string The key for this segment
 --- @return any|nil @The protected table from a segment
 --- @return "full"|nil @If the segment has reached its `size_per_key` then the error "full" is returned
 function Lump:get(key)
@@ -75,7 +76,7 @@ end
 --- 
 --- note: Use of this method cannot garuntee a reference to t is not
 --- in use some where so take care with its use
---- @param key string The key for this pool segment
+--- @param key string The key for this segment
 --- @param t any The value to return to its segment
 function Lump:unuse(key, t)
   log.trace("unuse", key, t)
@@ -90,7 +91,7 @@ end
 --- Remove the table from management by this Lump. This will remove any guards on `t`, prevent
 --- `t` from being placed back into `unused`, and make space for new tables to be created
 ---
---- @param key string The key for this pool segment
+--- @param key string The key for this segment
 --- @param t any The value to remove from this Lump
 function Lump:remove(key, t)
   log.trace("unuse", key, t)
