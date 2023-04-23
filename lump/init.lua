@@ -2,6 +2,9 @@ local log = require "log"
 
 --- @class Guard
 --- A guard to protect a parent table from garbage collection
+--- @field parent table The table to protect from GC
+--- @field on_gc fun(table) The function that protects parent from GC
+--- @field setment_key string The identifer of the LumpSegment this Guard belongs to
 local Guard = {}
 Guard.__index = Guard
 Guard.__gc = function(self)
@@ -14,14 +17,16 @@ Guard._mode = "v"
 
 --- @param parent table The table to protect from GC
 --- @param on_gc fun(table) The function that protects this table
-function Guard.new(parent, on_gc)
+--- @param segment_key string The identifier of the segment this table is tied to
+function Guard.new(parent, on_gc, segment_key)
   log.trace("Guard.new", parent, on_gc)
-  local guard = setmetatable({_on_gc = on_gc, parent = parent}, Guard)
+  local guard = setmetatable({_on_gc = on_gc, parent = parent, segment_key = segment_key}, Guard)
   parent.___lump_guard = guard
 end
 
 function Guard:__tostring()
-  return string.format("Guard(%s)", self.parent)
+  local suffix = string.format("[%s]", self.segment_key)
+  return string.format("Guard(%s)%s", self.parent, suffix)
 end
 
 --- @class Lump
@@ -65,7 +70,7 @@ function Lump:get(key)
   key = key or ""
   local existing = self.segments[key]
   if not existing then
-    existing = LumpSegment.new(self.size_unused_per_key, self.ctor)
+    existing = LumpSegment.new(self.size_unused_per_key, self.ctor, key)
     self.segments[key] = existing
   end
   return existing:get_unused()
@@ -78,14 +83,15 @@ end
 --- in use some where so take care with its use
 --- @param key string The key for this segment
 --- @param t any The value to return to its segment
-function Lump:unuse(key, t)
+function Lump:unuse(t, key)
+  key = key or t.___lump_guard.segment_key
   log.trace("unuse", key, t)
   --- @type LumpSegment
   local existing = self.segments[key]
   if not existing  then
     return nil, "unknown key"
   end
-  existing:_demote(t.___lump_guard)
+  return existing:_demote(t.___lump_guard)
 end
 
 --- Remove the table from management by this Lump. This will remove any guards on `t`, prevent
@@ -93,28 +99,31 @@ end
 ---
 --- @param key string The key for this segment
 --- @param t any The value to remove from this Lump
-function Lump:remove(key, t)
+function Lump:remove(t, key)
+  key = key or t.___lump_guard.segment_key
   log.trace("unuse", key, t)
   t.___lump_guard = nil
   local existing = self.segments[key]
   if not existing then
-    local msg = string.format("segment with key %q not found", key)
-    log.warn(msg)
-    return nil, msg
+    log.warn(string.format("segment with key %q not found", key))
+    return nil, "unknown key"
   end
   existing._ct = math.max(0, existing._ct - 1)
+  return 1
 end
 
 --- Create a new segment
 --- @param max integer The max size for this segment
 --- @param ctor fun():any The constructor to use for new entries
+--- @param key string The name of this segment
 --- @return LumpSegment
-function LumpSegment.new(max, ctor)
+function LumpSegment.new(max, ctor, key)
   return setmetatable({
     max = max,
     unused = {},
     ctor = ctor,
     _ct = 0,
+    key = key,
   }, LumpSegment)
 end
 
@@ -143,7 +152,7 @@ function LumpSegment:_promote()
   local gc = function(gc_able)
     self:_demote(gc_able)
   end
-  local _guard = Guard.new(ret, gc)
+  local _guard = Guard.new(ret, gc, self.key)
   return ret
 end
 

@@ -10,6 +10,7 @@ describe("GC Guard #g", function()
     end
     local one = test()
     collectgarbage("collect")
+    assert.are.equal(1, #l.segments[key].unused)
     local two = test()
     assert.are.equal(one, two)
   end)
